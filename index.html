@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lower Decks — Explicit Heat Combat</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{box-sizing:border-box}
+html,body{height:100%;margin:0;background:#000;overflow:hidden;font-family:Georgia,'Times New Roman',serif;color:#e8dcd0}
+#fit{position:absolute;left:0;top:0;width:960px;height:540px;transform-origin:0 0}
+canvas{position:absolute;left:0;top:0;width:960px;height:540px}
+.hide{display:none!important}
+
+/* Combat overlay */
+#bt{position:absolute;inset:0;background:radial-gradient(ellipse at 70% 40%,#1b2a30 0%,#0a1014 55%,#020304 100%)}
+#bt:after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at 50% 45%,transparent 30%,#000 100%);pointer-events:none;animation:fl 4s infinite}
+#floor{position:absolute;left:0;right:0;bottom:0;height:210px;background:linear-gradient(#0c1216,#020304);border-top:1px solid #243038}
+#en{position:absolute;right:50px;top:60px;height:320px;animation:bob 3s ease-in-out infinite;filter:drop-shadow(0 0 20px #000);object-fit:contain}
+#en.hit{animation:shake .35s;filter:brightness(2.2) saturate(0) drop-shadow(0 0 25px #f00)}
+#en.dead{transition:all 1.2s;opacity:0;transform:translateY(40px);filter:blur(6px)}
+#por{position:absolute;left:-10px;bottom:0;height:480px;pointer-events:none;filter:drop-shadow(0 0 18px #000);object-fit:contain}
+#por.hit{animation:shake .35s;filter:drop-shadow(0 0 18px #000) brightness(1.6) sepia(1) hue-rotate(-40deg) saturate(4)}
+#por.climax{animation:climaxPulse .8s ease-in-out 3}
+
+.bar{position:absolute;width:270px;font-size:12px;letter-spacing:1px}
+.bar i{display:block;height:11px;margin:3px 0 7px;background:#1a1a1a;border:1px solid #444;border-radius:5px;overflow:hidden;position:relative}
+.bar b{display:block;height:100%;transition:width .45s cubic-bezier(.2,.8,.2,1);border-radius:4px}
+#pbar{left:290px;top:10px}
+#ebar{right:18px;top:10px;text-align:right}
+#heatbar{left:290px;top:48px;width:270px}
+#eheatbar{right:18px;top:48px;width:270px;text-align:right}
+
+/* Heat fill + urgency animations */
+.heatfill{
+  background:linear-gradient(90deg,#ff4d8d,#ff85b3);
+  box-shadow:0 0 8px #ff4d8d88;
+}
+.heatfill.pulse{
+  animation:heatPulse .6s ease-in-out infinite;
+}
+.heatfill.critical{
+  background:linear-gradient(90deg,#ff1a5e,#ff4d8d,#ff1a5e);
+  animation:heatCritical .35s linear infinite;
+  box-shadow:0 0 14px #ff1a5e;
+}
+.eheatfill{background:linear-gradient(90deg,#8b5cf6,#c084fc)}
+
+@keyframes heatPulse{
+  0%,100%{filter:brightness(1);box-shadow:0 0 8px #ff4d8d88}
+  50%{filter:brightness(1.35);box-shadow:0 0 16px #ff85b3}
+}
+@keyframes heatCritical{
+  0%,100%{filter:brightness(1.1);box-shadow:0 0 12px #ff1a5e}
+  50%{filter:brightness(1.6);box-shadow:0 0 22px #ff4d8d}
+}
+@keyframes climaxPulse{
+  0%,100%{filter:brightness(1) drop-shadow(0 0 18px #000)}
+  50%{filter:brightness(1.8) sepia(.4) hue-rotate(-20deg) drop-shadow(0 0 30px #ff4d8d)}
+}
+
+#menu{position:absolute;left:290px;top:200px;width:380px;display:grid;grid-template-columns:1fr 1fr;gap:6px}
+button{font:inherit;font-size:14px;padding:9px 5px;background:#150d12e0;color:#f1d9d0;border:1px solid #7a3b4a;cursor:pointer;letter-spacing:.4px;border-radius:4px}
+button:hover:not(:disabled){background:#4a1a2c;border-color:#e0708c}
+button:disabled{opacity:.35;cursor:default}
+button small{display:block;font-size:10px;opacity:.65;margin-top:1px}
+
+#dlg{position:absolute;left:290px;right:16px;bottom:12px;height:135px;background:#07090cee;border:1px solid #6c3344;padding:11px 15px;box-shadow:0 0 30px #000;border-radius:4px}
+#nm{font-size:13px;letter-spacing:2px;color:#e8869f;text-transform:uppercase;margin-bottom:5px}
+#tx{font-size:16px;line-height:1.4}
+#nx{position:absolute;right:12px;bottom:7px;font-size:11px;opacity:.6;animation:fl 1.2s infinite}
+
+#hud{position:absolute;left:10px;top:8px;font-size:12px;letter-spacing:1px;text-shadow:0 0 4px #000;z-index:2}
+#hint{position:absolute;left:10px;bottom:8px;font-size:11px;opacity:.55;z-index:2}
+#end{position:absolute;inset:0;background:#000d;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-size:26px;z-index:9;text-align:center}
+
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-12px)}40%{transform:translateX(10px)}60%{transform:translateX(-7px)}80%{transform:translateX(4px)}}
+@keyframes bob{50%{transform:translateY(-6px)}}
+@keyframes fl{50%{opacity:.7}}
+</style>
+</head>
+<body>
+<div id="fit">
+<canvas id="cv" width="960" height="540"></canvas>
+<div id="hud"></div>
+<div id="hint">WASD / Arrows — move · E — talk · Space / Click — continue · Reach the green exit door</div>
+
+<div id="bt" class="hide">
+  <div id="floor"></div>
+  <img id="en">
+  <div class="bar" id="pbar"></div>
+  <div class="bar" id="ebar"></div>
+  <div class="bar" id="heatbar"></div>
+  <div class="bar" id="eheatbar"></div>
+  <div id="menu" class="hide"></div>
+</div>
+<img id="por" class="hide">
+
+<div id="dlg" class="hide"><div id="nm"></div><div id="tx"></div><div id="nx">▼</div></div>
+<div id="end" class="hide"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const c = $('cv').getContext('2d');
+const VW = 960, VH = 540, FT = 310, FB = 510, LW = 2200;
+
+const load = src => new Promise(r => { const i = new Image(); i.onload = () => r(i); i.onerror = () => r(null); i.src = src; });
+
+let SPR = {};
+
+async function loadAll() {
+  const files = {
+    frontSheet: 'tanktop_front_walk_sheet.png',
+    backSheet:  'tanktop_back_walk_sheet.png',
+    leftSheet:  'tanktop_left_walk_sheet.png',
+    rightSheet: 'tanktop_right_walk_sheet.png',
+    frontIdle:  'tanktop_front.png',
+    npc: 'colonistW_frontsprite.png',
+    infDockF: 'Infected_Dock_Worker_front.png',
+    infDockL: 'Infected_Dock_Worker_left.png',
+    infColW:  'Infected_ColonistW_frontsprite.png',
+    infColWL: 'Infected_ColonistW_leftsprite.png',
+    infBlondF:'infectedblonde_frontsprite.png',
+    infBlondL:'infectedblonde_leftsprite.png',
+    infColF:  'infectedcolonist_frontsprite.png',
+    infColL:  'infectedcolonist_leftsprite.png'
+  };
+  for (const [k, src] of Object.entries(files)) {
+    SPR[k] = await load(src);
+  }
+  SPR.walk = {
+    front: sliceSheet(SPR.frontSheet, 8),
+    back:  sliceSheet(SPR.backSheet, 6),
+    left:  sliceSheet(SPR.leftSheet, 6),
+    right: sliceSheet(SPR.rightSheet, 6)
+  };
+}
+
+function sliceSheet(img, frames) {
+  if (!img) return [];
+  const fw = Math.floor(img.width / frames);
+  const arr = [];
+  for (let i = 0; i < frames; i++) {
+    const cv = document.createElement('canvas');
+    cv.width = fw; cv.height = img.height;
+    cv.getContext('2d').drawImage(img, i * fw, 0, fw, img.height, 0, 0, fw, img.height);
+    arr.push(cv);
+  }
+  return arr;
+}
+
+let S = 'load';
+let T = 0, cam = 0;
+const keys = {};
+
+const P = {
+  x: 180, y: 420, dir: 'front', t: 0, mv: false,
+  hp: 100, heat: 0, fl: 2,
+  overstim: false,   // ≥70%
+  climaxed: false    // just hit 100%
+};
+
+const npc = { x: 980, y: 430 };
+
+const ens = [
+  { k: 'dock',  x: 520,  y: 400, hx: 520,  vx: 28,  cd: 0, dead: false, gender: 'male',   ph: 0 },
+  { k: 'colW',  x: 820,  y: 445, hx: 820,  vx: -22, cd: 0, dead: false, gender: 'female', ph: 1.2 },
+  { k: 'blond', x: 1240, y: 410, hx: 1240, vx: 30,  cd: 0, dead: false, gender: 'female', ph: 2.4 },
+  { k: 'col',   x: 1580, y: 450, hx: 1580, vx: -25, cd: 0, dead: false, gender: 'female', ph: 0.7 }
+];
+
+const DEF = {
+  dock:  { n: 'Infected Dock Worker', hp: 75, a: [11,17], sprF: 'infDockF', sprL: 'infDockL' },
+  colW:  { n: 'Infected Colonist',    hp: 60, a: [9,15],  sprF: 'infColW',  sprL: 'infColWL' },
+  blond: { n: 'Infected Blonde',      hp: 65, a: [10,16], sprF: 'infBlondF',sprL: 'infBlondL' },
+  col:   { n: 'Infected Scout',       hp: 55, a: [8,14],  sprF: 'infColF',  sprL: 'infColL' }
+};
+
+const lamps = [
+  { x: 200, ph: 0 }, { x: 520, ph: 1.1 }, { x: 860, ph: 2.3 },
+  { x: 1180, ph: 0.6 }, { x: 1520, ph: 1.8 }, { x: 1860, ph: 0.3 }
+];
+const crates = [
+  { x: 340, w: 70, h: 55 }, { x: 700, w: 90, h: 70 },
+  { x: 1100, w: 60, h: 48 }, { x: 1450, w: 80, h: 62 }
+];
+const motes = Array.from({ length: 40 }, () => ({
+  x: Math.random() * LW, y: Math.random() * VH, r: 1 + Math.random() * 2, s: 0.3 + Math.random() * 0.7
+}));
+
+let B = { e: null, hp: 0, max: 0, heat: 0, ent: 0, brace: false, gender: 'male' };
+
+const MALE_ATK = [
+  { dmg: [10,16], heat: 14, txt: "The infected male shoves Ava hard against the wall, hips slamming into hers as he grinds his thick, leaking cock against her through the thin fabric of her tank top. Hot breath pants against her neck." },
+  { dmg: [8,14],  heat: 18, txt: "He pins both of her wrists above her head with one rough hand and shoves the other between her legs, fingers pressing hard against her cunt through the fabric. He growls low in her ear." },
+  { dmg: [12,18], heat: 12, txt: "A large hand closes around Ava’s throat and yanks her forward until her chest is crushed against his. He rolls his hips, letting her feel every inch of how hard he is." },
+  { dmg: [9,15],  heat: 16, txt: "He bites down on the side of her neck hard enough to leave a bruise while grinding his cock against her thigh. His free hand squeezes her ass roughly under the short hem of her tank top." },
+  { dmg: [7,13],  heat: 20, txt: "He crashes his mouth onto hers, tongue forcing its way in as he ruts against her. One hand cups her breast through the thin white fabric and pinches the nipple hard." }
+];
+
+const FEMALE_ATK = [
+  { dmg: [9,15],  heat: 16, txt: "The infected woman forces one thick thigh between Ava’s legs and grinds her wet cunt hard against her. She bites Ava’s lower lip and moans into her mouth." },
+  { dmg: [8,14],  heat: 19, txt: "She shoves Ava against the wall and fills both hands with her tits, squeezing and rolling the nipples through the tight tank top while rubbing her soaked pussy against Ava’s hip." },
+  { dmg: [10,16], heat: 15, txt: "She fists a hand in Ava’s hair and yanks her head back, exposing her throat. Her other hand slides straight between Ava’s legs and rubs firm circles over her clit through the fabric." },
+  { dmg: [11,17], heat: 21, txt: "She hooks a leg around Ava’s waist and grinds their cunts together hard, soaking through both layers of clothes. Her nails dig into Ava’s bare ass as she pants against her neck." },
+  { dmg: [7,13],  heat: 22, txt: "She kisses Ava deep and dirty while slipping two fingers under the hem of the tank top, rubbing directly over her clit and entrance. ‘You’re already this wet for me?’ she whispers." }
+];
+
+/* Explicit sexual defeat lines */
+const DEFEAT_LINES = [
+  "Ava forces the infected down, straddling its face as she grinds her soaked cunt against its mouth until it stops struggling. She cums hard, thighs shaking, then stands and leaves it twitching on the floor.",
+  "She pins the infected, one hand around its throat, the other stroking it roughly while she rides its thigh. When it finally goes limp she finishes herself on top of it with a low, satisfied moan.",
+  "Ava drops to her knees only long enough to take the infected into her mouth, then rises and fucks it against the wall until it collapses. She wipes her lips, still trembling from her own orgasm.",
+  "She turns the infected around, presses her body flush against its back, and reaches around to finish it with fast, filthy strokes while whispering filth in its ear. When it cums she grinds herself to climax against its ass.",
+  "Ava shoves the infected onto its back, sits on its face, and uses its tongue until she cums with a broken cry. Only then does she finish it off with a final, almost tender strike."
+];
+
+function R(a, b) { return Math.floor(Math.random() * (b - a + 1)) + a; }
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function bars() {
+  const pct = v => Math.max(0, Math.min(100, v));
+  $('pbar').innerHTML = `AVA HP<br><i><b style="width:${pct(P.hp)}%;background:#c44"></b></i>`;
+  $('ebar').innerHTML = `${DEF[B.e.k].n}<br><i><b style="width:${pct(B.hp / B.max * 100)}%;background:#a33;float:right"></b></i>`;
+
+  // Heat bars with urgency classes
+  const heatEl = $('heatbar');
+  const fillClass = P.heat >= 100 ? 'heatfill critical' : (P.heat >= 70 ? 'heatfill pulse' : 'heatfill');
+  heatEl.innerHTML = `AVA HEAT${P.heat >= 70 ? (P.heat >= 100 ? ' — CRITICAL' : ' — OVERSTIM') : ''}<br><i><b class="${fillClass}" style="width:${pct(P.heat)}%"></b></i>`;
+
+  $('eheatbar').innerHTML = `ENEMY HEAT<br><i><b class="eheatfill" style="width:${pct(B.heat)}%;float:right"></b></i>`;
+}
+
+function hitFx(id, cls = 'hit') {
+  const el = $(id);
+  el.classList.remove(cls);
+  void el.offsetWidth;
+  el.classList.add(cls);
+  setTimeout(() => el.classList.remove(cls), 380);
+}
+
+let queue = [], onDone = null;
+function say(lines, cb) {
+  queue = lines.slice();
+  onDone = cb || null;
+  $('dlg').classList.remove('hide');
+  nextLine();
+}
+function nextLine() {
+  if (!queue.length) {
+    $('dlg').classList.add('hide');
+    if (onDone) onDone();
+    return;
+  }
+  const [nm, tx] = queue.shift();
+  $('nm').textContent = nm || '';
+  $('tx').textContent = tx;
+}
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' || e.code === 'Enter') {
+    if (!$('dlg').classList.contains('hide')) nextLine();
+  }
+});
+$('dlg').onclick = nextLine;
+
+function startBattle(e) {
+  S = 'battle';
+  B.e = e;
+  B.hp = B.max = DEF[e.k].hp;
+  B.heat = 0;
+  B.ent = 0;
+  B.brace = false;
+  B.gender = e.gender;
+  P.overstim = P.heat >= 70;
+  P.climaxed = false;
+
+  $('bt').classList.remove('hide');
+  $('por').classList.remove('hide');
+  $('por').src = 'tanktop_front.png';
+  $('por').classList.remove('climax');
+  $('en').src = SPR[DEF[e.k].sprF] ? SPR[DEF[e.k].sprF].src : '';
+  $('en').classList.remove('dead', 'hit');
+
+  bars();
+  say([['System', `An infected ${e.gender} locks onto Ava. Red eyes glow.`]], menu);
+}
+
+function menu() {
+  if (S !== 'battle') return;
+  // If Ava just climaxed she skips this turn
+  if (P.climaxed) {
+    P.climaxed = false;
+    say([['Ava', "She’s still shaking, thighs wet, unable to act…"]], enemyTurn);
+    return;
+  }
+
+  const m = $('menu');
+  m.classList.remove('hide');
+  const btns = [
+    ['Strike', '12-20 dmg · +8 Heat', 's'],
+    ['Tease', 'daze + big Heat', 't'],
+    ['Provocative', '15 Heat · Fluster', 'p'],
+    ['Whisper', '10 Heat · almost always daze', 'w'],
+    ['Heat Rush', '40 Heat · heavy hit', 'r'],
+    ['Dominate', '50 Heat · Subdue', 'd'],
+    ['Heartbreaker', '60 Heat · finisher', 'h'],
+    ['Brace', 'halve dmg · +Heat', 'b'],
+    ['Flask ×' + P.fl, 'heal 28-35', 'f'],
+    ['Flee', '60% escape', 'x']
+  ];
+  m.innerHTML = btns.map(([n, s, k]) => {
+    const dis = (k === 'h' && P.heat < 60) || (k === 'r' && P.heat < 40) ||
+                (k === 'd' && P.heat < 50) || (k === 'p' && P.heat < 15) ||
+                (k === 'w' && P.heat < 10) || (k === 'f' && P.fl < 1);
+    return `<button data-k="${k}" ${dis ? 'disabled' : ''}>${n}<small>${s}</small></button>`;
+  }).join('');
+  m.querySelectorAll('button').forEach(btn => btn.onclick = () => act(btn.dataset.k));
+}
+
+function checkHeatThresholds() {
+  if (P.heat >= 100 && !P.climaxed) {
+    P.climaxed = true;
+    P.overstim = true;
+    $('por').classList.add('climax');
+    return true; // climax triggered
+  }
+  if (P.heat >= 70) P.overstim = true;
+  else P.overstim = false;
+  return false;
+}
+
+function act(k) {
+  $('menu').classList.add('hide');
+  const L = [];
+  let d = 0;
+
+  // Overstim penalty: 15% chance moves fail or cost extra
+  if (P.overstim && Math.random() < 0.18 && k !== 'f' && k !== 'x' && k !== 'b') {
+    L.push(['Ava', "Her body betrays her — a sudden wave of heat makes her moan and miss the timing."]);
+    P.heat = Math.min(100, P.heat + 6);
+    say(L, () => { bars(); enemyTurn(); });
+    return;
+  }
+
+  if (k === 's') {
+    d = R(12, 20); P.heat = Math.min(100, P.heat + 8);
+    L.push(['Ava', `She drives a hard strike into the infected. (${d} damage)`]);
+  }
+  if (k === 't') {
+    d = R(4, 8); P.heat = Math.min(100, P.heat + 22); B.ent = 2;
+    L.push(['Ava', pick([
+      "Ava hooks a thumb under the strap of her tank top and lets it slip off one shoulder. 'Like what you see?'",
+      "She leans in close, breath warm against the infected’s face. 'Come on… focus on me.'",
+      "Ava trails a finger down between her breasts, the thin fabric clinging. 'Don’t look away.'",
+      "She tilts her head, blonde hair spilling, and smirks. 'Poor thing. Want to be good for me?'"
+    ])]);
+    L.push(['', `The infected shudders, mesmerized and dazed. (${d} damage)`]);
+  }
+  if (k === 'p') {
+    d = R(6, 12); P.heat = Math.max(0, P.heat - 15); P.heat = Math.min(100, P.heat + 26); B.ent = Math.max(B.ent, 1);
+    L.push(['Ava', "Ava slowly slides one hand down her own stomach, then lower, cupping herself through the tiny tank top while never looking away. She lets out a quiet, filthy little moan."]);
+    L.push(['', `The infected’s red eyes lock on her fingers. Flustered. (${d} damage)`]);
+  }
+  if (k === 'w') {
+    d = R(3, 7); P.heat = Math.max(0, P.heat - 10); P.heat = Math.min(100, P.heat + 24); B.ent = 2;
+    L.push(['Ava', "She closes the gap until her tits press against the infected’s chest through the thin white fabric. Lips brush its ear as she breathes something filthy."]);
+    L.push(['', `The creature goes rigid. (${d} damage)`]);
+  }
+  if (k === 'r') {
+    d = R(24, 36); P.heat = Math.max(0, P.heat - 40);
+    if (B.ent > 0) d = Math.floor(d * 1.45);
+    L.push(['Ava', "All the tension snaps. Ava surges forward, one hand fisting the infected’s clothes, the other delivering a brutal strike while her hips grind against it."]);
+    L.push(['', `Heavy hit. (${d} damage)`]);
+  }
+  if (k === 'd') {
+    d = R(18, 30); P.heat = Math.max(0, P.heat - 50); P.heat = Math.min(100, P.heat + 10); B.ent = Math.max(B.ent, 1);
+    L.push(['Ava', "She slams the infected back against the wall, one thigh forced between its legs, and keeps her body pinned tight while she strikes. Her free hand slides down and squeezes hard between its legs."]);
+    L.push(['', `Subdued. (${d} damage)`]);
+  }
+  if (k === 'h') {
+    d = R(36, 52); P.heat = Math.max(0, P.heat - 60);
+    L.push(['Ava', "She dumps every bit of Heat into one vicious, intimate strike. Ava presses her body flush against the infected, lips brushing its ear as she drives the blow home and whispers, ‘Come for me.’"]);
+    L.push(['', `Crushing finisher. (${d} damage)`]);
+  }
+  if (k === 'b') {
+    B.brace = true; P.heat = Math.min(100, P.heat + 8);
+    L.push(['Ava', "She plants her feet, rolls her shoulders back so the tank top stretches tight across her chest, and doesn’t flinch."]);
+  }
+  if (k === 'f') {
+    P.fl--; const heal = R(28, 35);
+    P.hp = Math.min(100, P.hp + heal);
+    L.push(['Ava', `She downs the flask. The liquid burns like alcohol and sex on the way down. (+${heal} HP)`]);
+  }
+  if (k === 'x') {
+    if (Math.random() < 0.6) {
+      L.push(['Ava', "She turns and runs, thighs tight, heart racing. No shame. Just survival."]);
+      return say(L, () => { B.e.cd = 5; B.e.x += B.e.x > P.x ? 180 : -180; endBattle(); });
+    }
+    L.push(['Ava', "She tries to run — it blocks her path!"]);
+  }
+
+  if (d) { B.hp -= d; hitFx('en'); }
+
+  // Check for climax after move
+  const climaxNow = checkHeatThresholds();
+
+  say(L, () => {
+    bars();
+    if (climaxNow) {
+      // Forced climax sequence
+      say([
+        ['Ava', "Her Heat hits the limit. Ava’s knees buckle. A broken moan rips out of her as she cums hard — thighs shaking, tank top soaked, completely helpless for a moment."],
+        ['', "She loses her next turn. The infected watches, red eyes hungry."]
+      ], () => {
+        P.heat = 35; // hard reset after climax
+        P.climaxed = true;
+        bars();
+        enemyTurn();
+      });
+      return;
+    }
+    if (B.hp <= 0) {
+      $('en').classList.add('dead');
+      setTimeout(() => {
+        B.e.dead = true;
+        P.hp = Math.min(100, P.hp + 18);
+        P.heat = Math.max(0, P.heat - 20);
+        const defeat = pick(DEFEAT_LINES);
+        say([['Ava', defeat + " (+18 HP)"]], endBattle);
+      }, 700);
+    } else enemyTurn();
+  });
+}
+
+function enemyTurn() {
+  if (B.ent > 0) {
+    B.ent--;
+    if (Math.random() < 0.7) {
+      say([[DEF[B.e.k].n, "The infected sways in place, dazed and staring at Ava’s body."]], () => {
+        B.brace = false; menu();
+      });
+      return;
+    }
+  }
+
+  const pool = B.gender === 'male' ? MALE_ATK : FEMALE_ATK;
+  const atk = pick(pool);
+  let d = R(...atk.dmg);
+  if (B.brace) d = Math.ceil(d * 0.5);
+  if (B.ent > 0) d = Math.ceil(d * 0.7);
+
+  // Overstim: enemy hits give more Heat and slightly more damage
+  let heatGain = atk.heat;
+  if (P.overstim) {
+    heatGain = Math.floor(heatGain * 1.35);
+    d = Math.floor(d * 1.15);
+  }
+
+  P.hp -= d;
+  P.heat = Math.min(100, P.heat + heatGain);
+  B.heat = Math.min(100, B.heat + 9);
+
+  hitFx('por');
+
+  const climaxNow = checkHeatThresholds();
+
+  say([[DEF[B.e.k].n, `${atk.txt}\n\n${d} damage. +${heatGain} Ava Heat.`]], () => {
+    bars();
+    B.brace = false;
+
+    if (climaxNow) {
+      say([
+        ['Ava', "The stimulation pushes her over the edge. Ava cums helplessly while the infected is still on her — a loud, broken moan, legs giving out, completely open."],
+        ['', "She loses her next turn. Heat crashes hard afterward."]
+      ], () => {
+        P.heat = 30;
+        P.climaxed = true;
+        bars();
+        if (P.hp <= 0) lose();
+        else menu();
+      });
+      return;
+    }
+
+    if (P.hp <= 0) lose();
+    else menu();
+  });
+}
+
+function endBattle() {
+  $('bt').classList.add('hide');
+  $('por').classList.add('hide');
+  $('menu').classList.add('hide');
+  S = 'explore';
+  P.overstim = P.heat >= 70;
+  $('hud').textContent = `HP ${P.hp}   Heat ${P.heat}${P.overstim ? ' ⚠' : ''}   Flasks ${P.fl}`;
+}
+
+function lose() {
+  $('bt').classList.add('hide');
+  $('por').classList.add('hide');
+  S = 'dead';
+  endScreen('You succumbed to the dark…', 'Try again', () => {
+    $('end').classList.add('hide');
+    P.hp = 100; P.heat = 0; P.overstim = false; P.climaxed = false;
+    P.x = Math.max(160, P.x - 280);
+    B.e.cd = 7; S = 'explore';
+  });
+}
+
+function endScreen(msg, btn, cb) {
+  $('end').classList.remove('hide');
+  $('end').innerHTML = `<div>${msg}</div><button style="font-size:17px;padding:11px 26px">${btn}</button>`;
+  $('end').querySelector('button').onclick = cb;
+}
+
+function win() {
+  S = 'win';
+  endScreen('You reached the exit. The lower decks are behind you… for now.', 'Play again', () => location.reload());
+}
+
+function update(dt) {
+  T += dt;
+  if (S !== 'explore') return;
+
+  let dx = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0);
+  let dy = (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0);
+  P.mv = !!(dx || dy);
+
+  if (P.mv) {
+    const n = Math.hypot(dx, dy) || 1;
+    P.x = Math.max(40, Math.min(LW - 40, P.x + dx / n * 155 * dt));
+    P.y = Math.max(FT + 55, Math.min(FB, P.y + dy / n * 115 * dt));
+    P.t += dt;
+    P.dir = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'front' : 'back');
+  } else P.t = 0;
+
+  for (const e of ens) {
+    if (e.dead) continue;
+    e.cd = Math.max(0, e.cd - dt);
+    const dx2 = P.x - e.x, dy2 = (P.y - e.y) * 2, dist = Math.hypot(dx2, dy2);
+    if (dist < 310 && e.cd <= 0) {
+      e.x += Math.sign(dx2) * 58 * dt;
+      e.y += Math.sign(P.y - e.y) * 36 * dt;
+      e.vx = Math.sign(dx2) * 30;
+    } else {
+      e.x += e.vx * dt;
+      if (Math.abs(e.x - e.hx) > 160) e.vx *= -1;
+    }
+    if (dist < 64 && e.cd <= 0) { startBattle(e); return; }
+  }
+
+  if (P.x > LW - 130) { S = 'talk'; win(); }
+  cam = Math.max(0, Math.min(LW - VW, P.x - VW * 0.45));
+}
+
+function scl(y) { return 0.78 + 0.42 * (y - FT) / (FB - FT); }
+
+function dspr(img, x, y, h, flip) {
+  if (!img) return;
+  const w = (img.width || img.naturalWidth) * h / (img.height || img.naturalHeight);
+  c.save();
+  c.translate(x, y);
+  if (flip) c.scale(-1, 1);
+  c.drawImage(img, -w / 2, -h, w, h);
+  c.restore();
+}
+
+function lampF(L) {
+  let f = 0.85 + 0.15 * Math.sin(T * 13 + L.ph) * Math.sin(T * 5.3 + L.ph);
+  if (Math.sin(T * 2.1 + L.ph * 2) > 0.96) f *= 0.25;
+  return f;
+}
+
+function shadow(x, y, s) {
+  let nl = lamps[0];
+  for (const L of lamps) if (Math.abs(L.x - x) < Math.abs(nl.x - x)) nl = L;
+  const o = (x - nl.x) * 0.1, r = (32 + Math.abs(x - nl.x) * 0.05) * s;
+  c.fillStyle = 'rgba(0,0,0,.5)';
+  c.beginPath();
+  c.ellipse(x - cam + o, y, Math.min(r, 100), 8 * s, 0, 0, 7);
+  c.fill();
+}
+
+function draw() {
+  c.clearRect(0, 0, VW, VH);
+
+  let g = c.createLinearGradient(0, 0, 0, FT);
+  g.addColorStop(0, '#05090c'); g.addColorStop(1, '#16222a');
+  c.fillStyle = g; c.fillRect(0, 0, VW, FT);
+  for (let x = -((cam * 0.5) % 220); x < VW; x += 220) {
+    c.fillStyle = '#0b1318'; c.fillRect(x, 0, 26, FT);
+    c.fillStyle = '#1f2f38'; c.fillRect(x + 24, 0, 2, FT);
+  }
+  c.fillStyle = '#223038'; c.fillRect(0, 95, VW, 9); c.fillRect(0, 140, VW, 5);
+  c.fillStyle = '#34464f'; c.fillRect(0, 95, VW, 2);
+
+  g = c.createLinearGradient(0, FT, 0, VH);
+  g.addColorStop(0, '#141c21'); g.addColorStop(1, '#030506');
+  c.fillStyle = g; c.fillRect(0, FT, VW, VH - FT);
+  c.strokeStyle = '#1d2a31'; c.lineWidth = 1;
+  for (let i = 0; i < 8; i++) {
+    const y = FT + Math.pow(i / 7, 1.7) * (VH - FT);
+    c.beginPath(); c.moveTo(0, y); c.lineTo(VW, y); c.stroke();
+  }
+  for (let i = -4; i < 30; i++) {
+    const wx = i * 140 - (cam % 140) - 140 + 140;
+    c.beginPath(); c.moveTo(wx, FT); c.lineTo((wx - 480) * 1.7 + 480, VH); c.stroke();
+  }
+
+  for (const k of crates) {
+    const x = k.x - cam;
+    if (x < -120 || x > VW + 60) continue;
+    c.fillStyle = '#10181c'; c.fillRect(x, FT - k.h + 8, k.w, k.h);
+    c.fillStyle = '#26363e'; c.fillRect(x, FT - k.h + 8, k.w, 3);
+    c.fillStyle = '#070b0d'; c.fillRect(x + k.w - 5, FT - k.h + 8, 5, k.h);
+  }
+
+  const dx = LW - 60 - cam;
+  c.fillStyle = '#0d2a1c'; c.fillRect(dx - 30, FT - 170, 90, 185);
+  c.fillStyle = '#3cff9a'; c.globalAlpha = 0.55 + 0.15 * Math.sin(T * 3);
+  c.fillRect(dx - 20, FT - 160, 70, 165); c.globalAlpha = 1;
+
+  // Smaller, sharper sprites
+  const D = [
+    { y: P.y, x: P.x, s: scl(P.y), f: () => {
+      const frames = SPR.walk[P.dir];
+      if (frames && frames.length) {
+        const i = P.mv ? Math.floor(P.t * 9) % frames.length : 0;
+        dspr(frames[i], P.x - cam, P.y, 195 * scl(P.y), false); // reduced from ~255
+      } else if (SPR.frontIdle) {
+        dspr(SPR.frontIdle, P.x - cam, P.y, 195 * scl(P.y));
+      }
+    }}
+  ];
+
+  if (SPR.npc) {
+    D.push({ y: npc.y, x: npc.x, s: scl(npc.y), f: () => dspr(SPR.npc, npc.x - cam, npc.y, 185 * scl(npc.y)) });
+  }
+
+  for (const e of ens) {
+    if (e.dead) continue;
+    const def = DEF[e.k];
+    const img = e.vx < 0 && SPR[def.sprL] ? SPR[def.sprL] : SPR[def.sprF];
+    D.push({ y: e.y, x: e.x, s: scl(e.y), f: () => dspr(img, e.x - cam, e.y, 185 * scl(e.y), e.vx < 0 && !SPR[def.sprL]) });
+  }
+
+  D.sort((a, b) => a.y - b.y);
+  for (const o of D) { shadow(o.x, o.y, o.s); o.f(); }
+
+  c.globalCompositeOperation = 'lighter';
+  for (const L of lamps) {
+    const f = lampF(L), x = L.x - cam;
+    if (x < -300 || x > VW + 300) continue;
+    g = c.createRadialGradient(x, 70, 0, x, 70, 300 * f);
+    g.addColorStop(0, 'rgba(255,170,90,.22)');
+    g.addColorStop(1, 'rgba(255,170,90,0)');
+    c.fillStyle = g; c.fillRect(0, 0, VW, VH);
+  }
+  c.globalCompositeOperation = 'source-over';
+
+  const lc = document.createElement('canvas');
+  lc.width = VW; lc.height = VH;
+  const l = lc.getContext('2d');
+  l.fillStyle = 'rgba(0,0,4,.93)';
+  l.fillRect(0, 0, VW, VH);
+  l.globalCompositeOperation = 'destination-out';
+  const cut = (x, y, r, a) => {
+    const gg = l.createRadialGradient(x, y, r * 0.1, x, y, r);
+    gg.addColorStop(0, `rgba(0,0,0,${a})`);
+    gg.addColorStop(1, 'rgba(0,0,0,0)');
+    l.fillStyle = gg; l.fillRect(x - r, y - r, r * 2, r * 2);
+  };
+  for (const L of lamps) {
+    cut(L.x - cam, 150, 330 * lampF(L), 0.95);
+    cut(L.x - cam, FT + 60, 260 * lampF(L), 0.8);
+  }
+  cut(P.x - cam, P.y - 90, 200, 0.85);
+  c.drawImage(lc, 0, 0);
+
+  for (const e of ens) {
+    if (e.dead) continue;
+    c.fillStyle = `rgba(255,40,40,${0.35 + 0.3 * Math.sin(T * 4 + e.ph)})`;
+    const s = scl(e.y);
+    c.fillRect(e.x - cam - 7 * s, e.y - 165 * s, 3.5, 2.5);
+    c.fillRect(e.x - cam + 4 * s, e.y - 165 * s, 3.5, 2.5);
+  }
+
+  c.fillStyle = 'rgba(180,200,210,.25)';
+  for (const m of motes) {
+    const x = (m.x - cam * 0.9 + Math.sin(T * m.s + m.y) * 20 + LW * 2) % LW;
+    if (x < VW) c.fillRect(x, (m.y + T * m.s * 6) % VH, m.r, m.r);
+  }
+
+  g = c.createRadialGradient(480, 270, 200, 480, 270, 640);
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(1, 'rgba(0,0,0,.75)');
+  c.fillStyle = g; c.fillRect(0, 0, VW, VH);
+
+  if (S === 'explore' && Math.hypot(P.x - npc.x, (P.y - npc.y) * 2) < 110) {
+    c.fillStyle = '#f1d9d0'; c.font = '15px Georgia';
+    c.fillText('[E] Talk', npc.x - cam - 24, npc.y - 200 * scl(npc.y));
+  }
+}
+
+document.addEventListener('keydown', e => {
+  keys[e.key.toLowerCase()] = true;
+  if (e.code === 'KeyE' && S === 'explore' && Math.hypot(P.x - npc.x, (P.y - npc.y) * 2) < 110) {
+    S = 'talk';
+    say([
+      ['Survivor', "You’re still human… good. Take this flask. The infected get distracted if you play with them. Tease them. It buys you time."],
+      ['Survivor', "Their heat builds too. When they’re worked up they hit harder but also leave themselves open. Watch your own Heat — past 70 % you start losing control. At 100 % you’ll cum whether you want to or not."]
+    ], () => { P.fl = Math.min(3, P.fl + 1); S = 'explore'; });
+  }
+});
+document.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+let last = performance.now();
+function loop(n) {
+  const dt = Math.min(0.05, (n - last) / 1000);
+  last = n;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+(async () => {
+  await loadAll();
+  $('hud').textContent = `HP ${P.hp}   Heat ${P.heat}   Flasks ${P.fl}`;
+  S = 'explore';
+  say([['System', "Lower decks. The lights are dying. Red eyes move in the dark.\nReach the green door at the far end.\nKeep your Heat under control… or the infected will use it against you."]], () => {});
+  requestAnimationFrame(loop);
+})();
+
+function resize() {
+  const s = Math.min(window.innerWidth / 960, window.innerHeight / 540);
+  $('fit').style.transform = `scale(${s})`;
+  $('fit').style.left = ((window.innerWidth - 960 * s) / 2) + 'px';
+  $('fit').style.top = ((window.innerHeight - 540 * s) / 2) + 'px';
+}
+window.addEventListener('resize', resize);
+resize();
+</script>
+</body>
+</html>
